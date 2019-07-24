@@ -1,5 +1,5 @@
 {
-    "name": "yadakhov/insert-on-duplicate-key",
+    "name": "caloskao/insert-on-duplicate-key",
     "type": "library",
     "description": "A trait for MySQL INSERT ON DUPLICATE KEY UPDATE.",
     "keywords": [
@@ -7,15 +7,13 @@
         "mysql",
         "eloquent"
     ],
-    "homepage": "https://github.com/yadakhov/insert-on-duplicate-key",
+    "homepage": "https://github.com/caloskao/insert-on-duplicate-key",
     "license": "MIT",
-    "authors": [
-        {
-            "name": "Yada Khov",
-            "email": "yada.khov@gmail.com",
-            "homepage": "https://github.com/yadakhov"
-        }
-    ],
+    "authors": [{
+        "name": "Calos kao",
+        "email": "calos3257@gmail.com",
+        "homepage": "https://caloskao.org"
+    }],
     "require": {},
     "require-dev": {
         "phpunit/phpunit": "~5.0",
@@ -24,7 +22,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Yadakhov\\": "src/"
+            "CalosKao\\": "src/"
         }
     }
 }

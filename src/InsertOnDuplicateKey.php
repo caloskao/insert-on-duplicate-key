@@ -1,8 +1,10 @@
 <?php
 
-namespace Yadakhov;
+namespace CalosKao;
 
-trait InsertOnDuplicateKey
+use DB;
+
+class InsertOnDuplicateKey
 {
     /**
      * Insert using mysql ON DUPLICATE KEY UPDATE.
@@ -18,7 +20,7 @@ trait InsertOnDuplicateKey
      *
      * @return int 0 if row is not changed, 1 if row is inserted, 2 if row is updated
      */
-    public static function insertOnDuplicateKey(array $data, array $updateColumns = null)
+    public static function insertOnDuplicateKey(string $table, array $data, array $updateColumns = null, string $connection = null)
     {
         if (empty($data)) {
             return false;
@@ -29,21 +31,25 @@ trait InsertOnDuplicateKey
             $data = [$data];
         }
 
-        $sql = static::buildInsertOnDuplicateSql($data, $updateColumns);
+        // $sql = static::buildInsertOnDuplicateSql($data, $updateColumns);
+        $sql = static::buildInsertOnDuplicateSql($table, $data, $updateColumns);
 
         $data = static::inLineArray($data);
 
-        return self::getModelConnectionName()->affectingStatement($sql, $data);
+        // return self::getModelConnectionName()->affectingStatement($sql, $data);
+        return DB::connection($connection)->affectingStatement($sql, $data);
     }
 
     /**
      * Insert using mysql INSERT IGNORE INTO.
      *
+     * @param string $table
      * @param array $data
+     * @param string $connection
      *
      * @return int 0 if row is ignored, 1 if row is inserted
      */
-    public static function insertIgnore(array $data)
+    public static function insertIgnore(string $table, array $data, string $connection = null)
     {
         if (empty($data)) {
             return false;
@@ -54,21 +60,22 @@ trait InsertOnDuplicateKey
             $data = [$data];
         }
 
-        $sql = static::buildInsertIgnoreSql($data);
+        $sql = static::buildInsertIgnoreSql($table, $data);
 
         $data = static::inLineArray($data);
 
-        return self::getModelConnectionName()->affectingStatement($sql, $data);
+        return DB::connection($connection)->affectingStatement($sql, $data);
     }
 
     /**
      * Insert using mysql REPLACE INTO.
      *
+     * @param string $table
      * @param array $data
      *
      * @return int 1 if row is inserted without replacements, greater than 1 if rows were replaced
      */
-    public static function replace(array $data)
+    public static function replace(string $table, array $data)
     {
         if (empty($data)) {
             return false;
@@ -79,45 +86,11 @@ trait InsertOnDuplicateKey
             $data = [$data];
         }
 
-        $sql = static::buildReplaceSql($data);
+        $sql = static::buildReplaceSql($table, $data);
 
         $data = static::inLineArray($data);
 
         return self::getModelConnectionName()->affectingStatement($sql, $data);
-    }
-
-    /**
-     * Static function for getting table name.
-     *
-     * @return string
-     */
-    public static function getTableName()
-    {
-        $class = get_called_class();
-
-        return (new $class())->getTable();
-    }
-
-    /**
-    * Static function for getting connection name
-    *
-    * @return string
-    */
-    public static function getModelConnectionName()
-    {
-        $class = get_called_class();
-
-        return (new $class())->getConnection();
-    }
-
-    /**
-     * Get the table prefix.
-     *
-     * @return string
-     */
-    public static function getTablePrefix()
-    {
-        return self::getModelConnectionName()->getTablePrefix();
     }
 
     /**
@@ -142,11 +115,15 @@ trait InsertOnDuplicateKey
      */
     protected static function buildQuestionMarks($data)
     {
-        $row = self::getFirstRow($data);
-        $questionMarks = array_fill(0, count($row), '?');
-
-        $line = '(' . implode(',', $questionMarks) . ')';
-        $lines = array_fill(0, count($data), $line);
+        $lines = [];
+        foreach ($data as $row) {
+            $count = count($row);
+            $questions = [];
+            for ($i = 0; $i < $count; ++$i) {
+                $questions[] = '?';
+            }
+            $lines[] = '(' . implode(',', $questions) . ')';
+        }
 
         return implode(', ', $lines);
     }
@@ -158,13 +135,21 @@ trait InsertOnDuplicateKey
      *
      * @return mixed
      */
+    /**
+     * Build the question mark placeholder.  Helper function for insertOnDuplicateKeyUpdate().
+     * Helper function for insertOnDuplicateKeyUpdate().
+     *
+     * @see https://github.com/yadakhov/insert-on-duplicate-key/blob/dbca15aaa6dc39df77553837d4e8988d4c6245a7/src/InsertOnDuplicateKey.php#L143
+     */
     protected static function getFirstRow(array $data)
     {
         if (empty($data)) {
             throw new \InvalidArgumentException('Empty data.');
         }
 
-        list($first) = $data;
+        reset($data);
+
+        $first = current($data);
 
         if (!is_array($first)) {
             throw new \InvalidArgumentException('$data is not an array of array.');
@@ -226,41 +211,43 @@ trait InsertOnDuplicateKey
     /**
      * Build the INSERT ON DUPLICATE KEY sql statement.
      *
+     * @param string $table
      * @param array $data
      * @param array $updateColumns
      *
      * @return string
+     *
+     * @see https://github.com/yadakhov/insert-on-duplicate-key/blob/dbca15aaa6dc39df77553837d4e8988d4c6245a7/src/InsertOnDuplicateKey.php#L234
      */
-    protected static function buildInsertOnDuplicateSql(array $data, array $updateColumns = null)
+    protected static function buildInsertOnDuplicateSql(string $table, array $data, array $updateColumns = null)
     {
         $first = static::getFirstRow($data);
-
-        $sql  = 'INSERT INTO `' . static::getTablePrefix() . static::getTableName() . '`(' . static::getColumnList($first) . ') VALUES' . PHP_EOL;
+        $columnList = static::getColumnList($first);
+        $sql  = "INSERT INTO `{$table}`($columnList) VALUES \n";
         $sql .=  static::buildQuestionMarks($data) . PHP_EOL;
         $sql .= 'ON DUPLICATE KEY UPDATE ';
-
         if (empty($updateColumns)) {
             $sql .= static::buildValuesList(array_keys($first));
         } else {
             $sql .= static::buildValuesList($updateColumns);
         }
-
         return $sql;
     }
 
     /**
      * Build the INSERT IGNORE sql statement.
      *
+     * @param string $table
      * @param array $data
      *
      * @return string
      */
-    protected static function buildInsertIgnoreSql(array $data)
+    protected static function buildInsertIgnoreSql(string $table, array $data)
     {
         $first = static::getFirstRow($data);
-
-        $sql  = 'INSERT IGNORE INTO `' . static::getTablePrefix() . static::getTableName() . '`(' . static::getColumnList($first) . ') VALUES' . PHP_EOL;
-        $sql .=  static::buildQuestionMarks($data);
+        $columnListString = static::getColumnList($first);
+        $sql = "INSERT IGNORE INTO `{$table}`({$columnListString}) VALUES\n"
+            . static::buildQuestionMarks($data);
 
         return $sql;
     }
@@ -272,11 +259,11 @@ trait InsertOnDuplicateKey
      *
      * @return string
      */
-    protected static function buildReplaceSql(array $data)
+    protected static function buildReplaceSql(string $table, array $data)
     {
         $first = static::getFirstRow($data);
 
-        $sql  = 'REPLACE INTO `' . static::getTablePrefix() . static::getTableName() . '`(' . static::getColumnList($first) . ') VALUES' . PHP_EOL;
+        $sql  = "REPLACE INTO {$table}( {static::getColumnList($first)} ) VALUES \n";
         $sql .=  static::buildQuestionMarks($data);
 
         return $sql;
